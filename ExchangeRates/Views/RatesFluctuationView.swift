@@ -17,31 +17,36 @@ struct RatesFluctuationView: View {
     @State private var viewDidLoad = true
     @State private var isPresentedBaseCurrencyFilter = false
     @State private var isPresentedMultiCurrencyFilter = false
-    
-    var searchResult: [RateFluctuationModel] {
-        if searchText.isEmpty {
-            return viewModel.ratesFluctuation
-        } else {
-            return viewModel.ratesFluctuation.filter {
-                $0.symbol.contains(searchText.uppercased()) ||
-                $0.change.formatter(decimalPlaces: 4).contains(searchText.uppercased()) ||
-                $0.changePct.toPercentage().contains(searchText.uppercased()) ||
-                $0.endRate.formatter(decimalPlaces: 2).contains(searchText.uppercased())
-                
-            }
-        }
-    }
-    
+
     
     var body: some View {
         NavigationView {
             VStack {
-                baseCurrencyTimePeriodFilterView
-                ratesFluctuationListView
-                
+                if case .loading = viewModel.currentState {
+                    ProgressView()
+                        .scaleEffect(2.2, anchor: .center)
+                } else if case .success = viewModel.currentState {
+                    baseCurrencyTimePeriodFilterView
+                    ratesFluctuationListView
+                } else if case .failure = viewModel.currentState {
+                    errorView
+                }
+        
             }
-            //.background(.red)
-            .searchable(text: $searchText)
+            .searchable(text: $searchText, prompt: "Procurar moeda")
+            .onChange(of: searchText) { searchText in
+                if searchText.isEmpty {
+                    viewModel.searchResults = viewModel.ratesFluctuation
+                } else {
+                    viewModel.searchResults = viewModel.ratesFluctuation.filter {
+                        $0.symbol.contains(searchText.uppercased()) ||
+                        $0.change.formatter(decimalPlaces: 6).contains(searchText) ||
+                        $0.changePct.formatter(decimalPlaces: 6).contains(searchText) ||
+                        $0.endRate.formatter(decimalPlaces: 6).contains(searchText)
+                        
+                    }
+                }
+            }
             .navigationTitle("Conversao de Moedas")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -127,8 +132,8 @@ struct RatesFluctuationView: View {
     }
     
     private var ratesFluctuationListView: some View {
-        List(searchResult) {fluctuation in
-            NavigationLink(destination: RateFluctuationDetailView(baseCurrency: viewModel.baseCurrency, rateFluctuation: fluctuation)) {
+        List(viewModel.searchResults) {fluctuation in
+            NavigationLink(destination: RateFluctuationDetailView(baseCurrency: viewModel.baseCurrency, fromCurrency: fluctuation.symbol)) {
                 VStack {
                     HStack(alignment: .center, spacing: 8) {
                         Text("\(fluctuation.symbol) / \(viewModel.baseCurrency)")
@@ -152,6 +157,32 @@ struct RatesFluctuationView: View {
             .listRowBackground(Color.white)
         }
         .listStyle(.plain)
+    }
+    
+    private var errorView: some View {
+        VStack(alignment: .center) {
+           Spacer()
+            
+            Image(systemName: "wifi.exclamationmark")
+                .resizable()
+                .frame(width: 60, height: 44)
+                .padding(.bottom, 4)
+            
+            Text("Ocorreu um erro na busca das flutuações das taxas!")
+                .font(.headline.bold())
+                .multilineTextAlignment(.center)
+            
+            Button {
+                viewModel.doFetchRatesFluctuation(timeRange: .today)
+            } label: {
+                Text("Tentar novamente?")
+            }
+            .padding(.top, 4)
+            
+            Spacer()
+        }
+        .padding()
+        
     }
     
 }
